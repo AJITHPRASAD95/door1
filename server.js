@@ -4,19 +4,18 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
-const dotenv = require('dotenv'); // For environment variables like MONGODB_URI
+const dotenv = require('dotenv');
 
-// FIX: For Socket.IO v2.x, the require returns the constructor function directly.
+// Socket.IO setup
 const SocketIOServer = require('socket.io'); 
 
-// Load environment variables from .env file (if running locally)
+// Load environment variables
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 
 // Enhanced Socket.IO configuration for ESP32 compatibility
-// FIX: Call the constructor function directly
 const io = SocketIOServer(server, { 
   cors: {
     origin: "*",
@@ -25,7 +24,7 @@ const io = SocketIOServer(server, {
     allowedHeaders: ["Content-Type"]
   },
   transports: ['websocket', 'polling'],
-  allowEIO3: true, // CRITICAL: Allows older Engine.IO v3 clients (like ESP32) to connect
+  allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
   upgradeTimeout: 30000,
@@ -41,8 +40,6 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
-
-// Serve static files from 'public' directory
 app.use(express.static('public'));
 
 // -----------------------------------------------------------------------------
@@ -61,11 +58,10 @@ const Room = mongoose.model('Room', RoomSchema);
 const LogSchema = new mongoose.Schema({
   roomName: { type: String, required: true },
   timestamp: { type: Date, default: Date.now },
-  action: { type: String, required: true }, // e.g., "DOOR_OPENED", "ACCESS_DENIED"
+  action: { type: String, required: true },
   type: { type: String, enum: ['success', 'failure'], required: true }
 });
 const Log = mongoose.model('Log', LogSchema);
-
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ajithtest95:ajith%40123@cluster0.n3qvh.mongodb.net/door';
@@ -83,7 +79,6 @@ mongoose.connect(MONGODB_URI, {
 // SOCKET.IO LOGIC & DEVICE TRACKING
 // -----------------------------------------------------------------------------
 
-// Simple in-memory device tracking
 let devices = [];
 let esp32Connected = false;
 
@@ -130,10 +125,10 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('door_opened_feedback', async (data) => {
-    const { deviceId, roomName } = data;
+  socket.on('door_acknowledge', async (data) => {
+    const { deviceId, roomName, status } = data;
     
-    console.log(`🚪 Door opened feedback received for ${roomName}`);
+    console.log(`✅ Door acknowledge received from ${roomName}: ${status}`);
     
     // Log the event
     await Log.create({ 
@@ -143,7 +138,12 @@ io.on('connection', (socket) => {
     });
 
     // Notify web clients
-    io.emit('log_update', { roomName: roomName, action: 'DOOR_OPENED', timestamp: new Date() });
+    io.emit('log_update', { 
+      roomName: roomName, 
+      action: 'DOOR_OPENED', 
+      timestamp: new Date(),
+      status: 'success'
+    });
   });
 
   socket.on('disconnect', () => {
@@ -168,19 +168,12 @@ setInterval(() => {
     devices = devices.filter(d => io.sockets.connected[d.socketId]);
     esp32Connected = devices.some(d => d.roomName !== 'Unassigned');
     io.emit('device_update', { devices: devices, esp32Count: devices.length });
-}, 60000); // Check every 60 seconds
+}, 60000);
 
 // -----------------------------------------------------------------------------
 // API ROUTES
 // -----------------------------------------------------------------------------
-// API to get all connected devices
-app.get('/api/devices', (req, res) => {
-    res.status(200).json({ 
-        success: true, 
-        devices: devices,
-        esp32Count: devices.length
-    });
-});
+
 // API to get all rooms
 app.get('/api/rooms', async (req, res) => {
     try {
@@ -197,14 +190,22 @@ app.post('/api/rooms', async (req, res) => {
         const { roomName, deviceId, doorAccess } = req.body;
         const newRoom = new Room({ roomName, deviceId, doorAccess });
         await newRoom.save();
-        io.emit('room_update'); // Notify all clients
+        io.emit('room_update');
         res.status(201).json({ success: true, room: newRoom });
     } catch (error) {
         res.status(400).json({ success: false, error: error.message });
     }
 });
 
-// API to trigger the door
+// API to get all connected devices
+app.get('/api/devices', (req, res) => {
+    res.status(200).json({ 
+        success: true, 
+        devices: devices,
+        esp32Count: devices.length
+    });
+});
+
 // API to trigger the door
 app.post('/api/trigger/:deviceId', async (req, res) => {
     const { deviceId } = req.params;
@@ -265,16 +266,6 @@ app.post('/api/trigger/:deviceId', async (req, res) => {
         roomName: room ? room.roomName : 'Unassigned'
     });
 });
-    const room = await getRoomByDeviceId(deviceId);
-
-    // Send the Socket.IO command to the specific ESP32 client
-    io.to(targetDevice.socketId).emit('door_trigger', {
-        roomName: room ? room.roomName : deviceId,
-        duration: duration
-    });
-    
-    res.status(200).json({ success: true, message: `Trigger command sent to device: ${deviceId}` });
-});
 
 // API to get logs for a room
 app.get('/api/logs/:roomName', async (req, res) => {
@@ -287,6 +278,15 @@ app.get('/api/logs/:roomName', async (req, res) => {
     }
 });
 
+// API to get all logs
+app.get('/api/logs', async (req, res) => {
+    try {
+        const logs = await Log.find().sort({ timestamp: -1 }).limit(100);
+        res.status(200).json({ success: true, logs });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 // Health check route
 app.get('/api/health', (req, res) => {
@@ -301,6 +301,15 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Test trigger route (for debugging)
+app.get('/api/test-trigger', (req, res) => {
+    res.json({
+        success: true,
+        message: 'Test endpoint working',
+        connectedDevices: devices.map(d => d.deviceId)
+    });
+});
+
 // Root route
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/public/index.html');
@@ -311,7 +320,16 @@ app.use((req, res) => {
   res.status(404).json({ 
     success: false, 
     error: 'Route not found',
-    path: req.path
+    path: req.path,
+    availableEndpoints: [
+      'GET  /',
+      'GET  /api/health',
+      'GET  /api/devices',
+      'GET  /api/rooms',
+      'GET  /api/logs',
+      'POST /api/trigger/:deviceId',
+      'POST /api/rooms'
+    ]
   });
 });
 
@@ -322,6 +340,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`📡 WebSocket server ready`);
   console.log(`🌐 Web interface: http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`📱 Devices endpoint: http://localhost:${PORT}/api/devices`);
 });
 
 // Graceful shutdown
