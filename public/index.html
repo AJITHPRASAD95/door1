@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Door Access Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status-badge.online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-badge.online .status-dot {
+            background: #28a745;
+        }
+
+        .status-badge.offline .status-dot {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        @media (max-width: 968px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 22px;
+        }
+
+        .room-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .room-item {
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .room-item:hover {
+            border-color: #007bff;
+            transform: translateX(5px);
+        }
+
+        .room-item.selected {
+            border-color: #007bff;
+            background: #e3f2fd;
+        }
+
+        .room-item.disabled {
+            opacity: 0.6;
+            background: #f5f5f5;
+        }
+
+        .room-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .room-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .room-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .status-icon {
+            font-size: 20px;
+        }
+
+        .room-info {
+            font-size: 13px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #28a745;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        .door-control {
+            text-align: center;
+        }
+
+        .selected-room {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .selected-room h3 {
+            color: #007bff;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .open-door-btn {
+            width: 100%;
+            padding: 30px;
+            font-size: 24px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .open-door-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
+        }
+
+        .open-door-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .open-door-btn .icon {
+            font-size: 36px;
+        }
+
+        .logs {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .log-item {
+            padding: 12px;
+            background: #f8f9fa;
+            border-left: 3px solid #007bff;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .log-time {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .log-action {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            animation: slideIn 0.3s;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+
+        .notification.success {
+            background: #28a745;
+        }
+
+        .notification.error {
+            background: #dc3545;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .add-room-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .add-room-form input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .add-room-form input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚪 Door Access Control</h1>
+            <div class="controls">
+                <div id="statusBadge" class="status-badge offline">
+                    <span class="status-dot"></span>
+                    <span id="statusText">ESP32 Offline</span>
+                </div>
+                <button class="btn btn-primary" onclick="refreshData()">
+                    <span>🔄</span> Refresh
+                </button>
+                <button class="btn btn-success" onclick="showAddRoomForm()">
+                    <span>➕</span> Add Room
+                </button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="card">
+                <h2>📋 Conference Rooms</h2>
+                <div id="addRoomForm" class="add-room-form" style="display: none;">
+                    <input type="text" id="newRoomName" placeholder="Enter room name..." />
+                    <button class="btn btn-success" onclick="addRoom()">Add</button>
+                    <button class="btn" style="background: #6c757d; color: white;" onclick="hideAddRoomForm()">Cancel</button>
+                </div>
+                <div id="roomList" class="room-list">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⏳</div>
+                        <div>Loading rooms...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🎮 Door Control</h2>
+                <div class="door-control">
+                    <div class="selected-room">
+                        <h3 id="selectedRoomName">No Room Selected</h3>
+                        <p id="selectedRoomStatus" style="color: #666;"></p>
+                    </div>
+                    <button id="openDoorBtn" class="open-door-btn" onclick="triggerDoor()" disabled>
+                        <span class="icon">🚪</span>
+                        <span id="btnText">OPEN DOOR</span>
+                    </button>
+                </div>
+
+                <div class="logs">
+                    <h3 style="margin-top: 30px; margin-bottom: 15px; color: #333;">Recent Access Logs</h3>
+                    <div id="logsList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        let selectedRoom = null;
+        let rooms = [];
+        let socket = io();
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadRooms();
+            checkServerStatus();
+            
+            // Socket.IO connection status
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                checkServerStatus();
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+                updateStatus(false);
+            });
+        });
+
+        async function loadRooms() {
+            try {
+                const response = await fetch(`${API_BASE}/rooms`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    rooms = data.data;
+                    renderRooms();
+                    
+                    if (rooms.length > 0 && !selectedRoom) {
+                        selectRoom(rooms[0]);
+                    }
+                }
+            } catch (error) {
+                showNotification('Error loading rooms: ' + error.message, 'error');
+            }
+        }
+
+        function renderRooms() {
+            const roomList = document.getElementById('roomList');
+            
+            if (rooms.length === 0) {
+                roomList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🏢</div>
+                        <div>No conference rooms found</div>
+                        <div style="margin-top: 10px;">
+                            <button class="btn btn-success" onclick="showAddRoomForm()">Add First Room</button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            roomList.innerHTML = rooms.map(room => `
+                <div class="room-item ${selectedRoom && selectedRoom.roomName === room.roomName ? 'selected' : ''} ${!room.doorAccess ? 'disabled' : ''}" 
+                     onclick="selectRoom(${JSON.stringify(room).replace(/"/g, '&quot;')})">
+                    <div class="room-header">
+                        <div class="room-name">${room.roomName}</div>
+                        <div class="room-status">
+                            <span class="status-icon">${room.doorAccess ? '🔓' : '🔒'}</span>
+                            <label class="toggle-switch" onclick="event.stopPropagation()">
+                                <input type="checkbox" ${room.doorAccess ? 'checked' : ''} 
+                                       onchange="toggleDoorAccess('${room.roomName}', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="room-info">
+                        Status: ${room.doorAccess ? 'Access Enabled' : 'Access Disabled'}
+                        ${room.lastAccessed ? `<br>Last accessed: ${new Date(room.lastAccessed).toLocaleString()}` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function selectRoom(room) {
+            selectedRoom = room;
+            renderRooms();
+            
+            document.getElementById('selectedRoomName').textContent = room.roomName;
+            document.getElementById('selectedRoomStatus').textContent = 
+                room.doorAccess ? '✅ Access Enabled' : '❌ Access Disabled';
+            
+            document.getElementById('openDoorBtn').disabled = !room.doorAccess;
+            
+            loadLogs(room.roomName);
+        }
+
+        async function toggleDoorAccess(roomName, enabled) {
+            try {
+                const response = await fetch(`${API_BASE}/rooms/${roomName}/access`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ doorAccess: enabled })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification(`Access ${enabled ? 'enabled' : 'disabled'} for ${roomName}`, 'success');
+                    await loadRooms();
+                    
+                    if (selectedRoom && selectedRoom.roomName === roomName) {
+                        selectRoom(data.data);
+                    }
+                } else {
+                    showNotification('Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Error updating access: ' + error.message, 'error');
+            }
+        }
+
+        async function triggerDoor() {
+            if (!selectedRoom) {
+                showNotification('Please select a room first', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('openDoorBtn');
+            const btnText = document.getElementById('btnText');
+            
+            btn.disabled = true;
+            btnText.innerHTML = '<span class="loading"></span> Opening...';
+
+            try {
+                const response = await fetch(`${API_BASE}/rooms/${selectedRoom.roomName}/trigger`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('✅ Door opened successfully!', 'success');
+                    await loadRooms();
+                    loadLogs(selectedRoom.roomName);
+                } else {
+                    showNotification('❌ ' + data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Error: ' + error.message, 'error');
+            } finally {
+                setTimeout(() => {
+                    btn.disabled = !selectedRoom.doorAccess;
+                    btnText.textContent = 'OPEN DOOR';
+                }, 3000);
+            }
+        }
+
+        async function loadLogs(roomName) {
+            try {
+                const response = await fetch(`${API_BASE}/rooms/${roomName}/logs`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const logsList = document.getElementById('logsList');
+                    
+                    if (data.data.length === 0) {
+                        logsList.innerHTML = '<div class="empty-state" style="padding: 20px;">No access logs yet</div>';
+                        return;
+                    }
+
+                    logsList.innerHTML = data.data.slice(-10).reverse().map(log => `
+                        <div class="log-item">
+                            <div class="log-action">${log.action}</div>
+                            <div class="log-time">${new Date(log.timestamp).toLocaleString()}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading logs:', error);
+            }
+        }
+
+        async function checkServerStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                updateStatus(data.esp32Connected);
+            } catch (error) {
+                updateStatus(false);
+            }
+        }
+
+        function updateStatus(isConnected) {
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+            
+            if (isConnected) {
+                badge.className = 'status-badge online';
+                text.textContent = 'ESP32 Online';
+            } else {
+                badge.className = 'status-badge offline';
+                text.textContent = 'ESP32 Offline';
+            }
+        }
+
+        function showAddRoomForm() {
+            document.getElementById('addRoomForm').style.display = 'flex';
+            document.getElementById('newRoomName').focus();
+        }
+
+        function hideAddRoomForm() {
+            document.getElementById('addRoomForm').style.display = 'none';
+            document.getElementById('newRoomName').value = '';
+        }
+
+        async function addRoom() {
+            const roomName = document.getElementById('newRoomName').value.trim();
+            
+            if (!roomName) {
+                showNotification('Please enter a room name', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/rooms`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        roomName: roomName,
+                        doorAccess: true
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Room added successfully', 'success');
+                    hideAddRoomForm();
+                    await loadRooms();
+                } else {
+                    showNotification('Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Error adding room: ' + error.message, 'error');
+            }
+        }
+
+        async function refreshData() {
+            await loadRooms();
+            await checkServerStatus();
+            if (selectedRoom) {
+                loadLogs(selectedRoom.roomName);
+            }
+            showNotification('Data refreshed', 'success');
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        // Refresh status every 10 seconds
+        setInterval(checkServerStatus, 10000);
+    </script>
+</body>
+</html>
