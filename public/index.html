@@ -583,46 +583,78 @@
             }
         }
 
-        async function triggerDoor() {
-            if (!selectedRoom) {
-                showNotification('Please select a room first', 'error');
-                return;
-            }
+        // Function to trigger door
+async function triggerDoor(deviceId) {
+    try {
+        console.log(`🚪 Triggering door for device: ${deviceId}`);
+        
+        const response = await fetch(`/api/trigger/${deviceId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                duration: 3000
+            })
+        });
 
-            const btn = document.getElementById('openDoorBtn');
-            const btnText = document.getElementById('btnText');
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`✅ Door trigger sent to ${result.roomName || deviceId}`, 'success');
+            console.log('✅ Trigger successful:', result.message);
+        } else {
+            showNotification(`❌ Failed: ${result.error}`, 'error');
+            console.error('❌ Trigger failed:', result.error);
             
-            btn.disabled = true;
-            btnText.innerHTML = '<span class="loading"></span> Opening...';
-
-            try {
-                // FIX: Use the deviceId for the trigger route, as defined in server.js
-                const response = await fetch(`${API_BASE}/trigger/${selectedRoom.deviceId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ duration: 3000 }) // Optional duration parameter
-                });
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    showNotification('✅ Door trigger command sent!', 'success');
-                    // We don't wait for door opened feedback here, just confirm command sent
-                } else {
-                    showNotification('❌ ' + data.error, 'error');
-                }
-            } catch (error) {
-                showNotification('Error: ' + error.message, 'error');
-            } finally {
-                // Re-enable button based on current status after a short delay
-                setTimeout(() => {
-                    btn.disabled = !selectedRoom.doorAccess || document.getElementById('statusText').textContent === 'ESP32 Offline';
-                    btnText.textContent = 'OPEN DOOR';
-                }, 1000); 
-                // Delay set to 1s to prevent rapid double-clicks while the server processes the command
+            // Show connected devices for debugging
+            if (result.connectedDevices) {
+                console.log('📱 Connected devices:', result.connectedDevices);
             }
         }
+    } catch (error) {
+        console.error('❌ Network error:', error);
+        showNotification('❌ Network error - check console', 'error');
+    }
+}
 
+// Function to load and display connected devices
+async function loadConnectedDevices() {
+    try {
+        const response = await fetch('/api/devices');
+        const result = await response.json();
+        
+        if (result.success) {
+            const devicesList = document.getElementById('devices-list');
+            if (devicesList) {
+                if (result.devices.length === 0) {
+                    devicesList.innerHTML = '<p>No devices connected</p>';
+                } else {
+                    devicesList.innerHTML = result.devices.map(device => `
+                        <div class="device-card">
+                            <h4>${device.roomName}</h4>
+                            <p>Device ID: ${device.deviceId}</p>
+                            <p>IP: ${device.ip}</p>
+                            <p>Connected: ${new Date(device.connectedAt).toLocaleString()}</p>
+                            <button onclick="triggerDoor('${device.deviceId}')">
+                                Open Door
+                            </button>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error loading devices:', error);
+    }
+}
+
+// Load devices when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadConnectedDevices();
+    // Refresh devices every 10 seconds
+    setInterval(loadConnectedDevices, 10000);
+});
         async function loadLogs(roomName) {
             try {
                 // FIX: Updated route to match the one defined in server.js
