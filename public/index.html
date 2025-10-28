@@ -416,6 +416,7 @@
                 <h2>📋 Conference Rooms</h2>
                 <div id="addRoomForm" class="add-room-form" style="display: none;">
                     <input type="text" id="newRoomName" placeholder="Enter room name..." />
+                    <input type="text" id="deviceIdInput" placeholder="Enter ESP32 Device ID..." />
                     <button class="btn btn-success" onclick="addRoom()">Add</button>
                     <button class="btn" style="background: #6c757d; color: white;" onclick="hideAddRoomForm()">Cancel</button>
                 </div>
@@ -470,6 +471,14 @@
                 console.log('Disconnected from server');
                 updateStatus(false);
             });
+
+            // Listen for device updates from the server
+            socket.on('device_update', (data) => {
+                console.log('Device update received:', data);
+                // Check if any registered device is online
+                const esp32IsOnline = data.devices.some(d => d.roomName !== 'Unassigned');
+                updateStatus(esp32IsOnline);
+            });
         });
 
         async function loadRooms() {
@@ -478,11 +487,18 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    rooms = data.data;
+                    // FIX: data.rooms is used in server.js, not data.data
+                    rooms = data.rooms; 
                     renderRooms();
                     
                     if (rooms.length > 0 && !selectedRoom) {
                         selectRoom(rooms[0]);
+                    } else if (rooms.length > 0 && selectedRoom) {
+                        // Re-select the room to update data (e.g., last accessed time)
+                        const currentRoom = rooms.find(r => r.roomName === selectedRoom.roomName);
+                        if (currentRoom) {
+                            selectRoom(currentRoom);
+                        }
                     }
                 }
             } catch (error) {
@@ -521,6 +537,8 @@
                         </div>
                     </div>
                     <div class="room-info">
+                        Device ID: <strong>${room.deviceId}</strong>
+                        <br>
                         Status: ${room.doorAccess ? 'Access Enabled' : 'Access Disabled'}
                         ${room.lastAccessed ? `<br>Last accessed: ${new Date(room.lastAccessed).toLocaleString()}` : ''}
                     </div>
@@ -534,15 +552,18 @@
             
             document.getElementById('selectedRoomName').textContent = room.roomName;
             document.getElementById('selectedRoomStatus').textContent = 
-                room.doorAccess ? '✅ Access Enabled' : '❌ Access Disabled';
+                `Device ID: ${room.deviceId} | ${room.doorAccess ? '✅ Access Enabled' : '❌ Access Disabled'}`;
             
-            document.getElementById('openDoorBtn').disabled = !room.doorAccess;
+            // Enable button only if access is enabled and an ESP32 is online (checked by checkServerStatus/device_update)
+            document.getElementById('openDoorBtn').disabled = !room.doorAccess || document.getElementById('statusText').textContent === 'ESP32 Offline';
             
             loadLogs(room.roomName);
         }
 
         async function toggleDoorAccess(roomName, enabled) {
             try {
+                // NOTE: PATCH endpoint in server.js needs to be implemented for this to work
+                // Assuming the backend has a PUT/PATCH route for room access control
                 const response = await fetch(`${API_BASE}/rooms/${roomName}/access`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -554,10 +575,6 @@
                 if (data.success) {
                     showNotification(`Access ${enabled ? 'enabled' : 'disabled'} for ${roomName}`, 'success');
                     await loadRooms();
-                    
-                    if (selectedRoom && selectedRoom.roomName === roomName) {
-                        selectRoom(data.data);
-                    }
                 } else {
                     showNotification('Error: ' + data.error, 'error');
                 }
@@ -579,44 +596,50 @@
             btnText.innerHTML = '<span class="loading"></span> Opening...';
 
             try {
-                const response = await fetch(`${API_BASE}/rooms/${selectedRoom.roomName}/trigger`, {
-                    method: 'POST'
+                // FIX: Use the deviceId for the trigger route, as defined in server.js
+                const response = await fetch(`${API_BASE}/trigger/${selectedRoom.deviceId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ duration: 3000 }) // Optional duration parameter
                 });
 
                 const data = await response.json();
                 
                 if (data.success) {
-                    showNotification('✅ Door opened successfully!', 'success');
-                    await loadRooms();
-                    loadLogs(selectedRoom.roomName);
+                    showNotification('✅ Door trigger command sent!', 'success');
+                    // We don't wait for door opened feedback here, just confirm command sent
                 } else {
                     showNotification('❌ ' + data.error, 'error');
                 }
             } catch (error) {
                 showNotification('Error: ' + error.message, 'error');
             } finally {
+                // Re-enable button based on current status after a short delay
                 setTimeout(() => {
-                    btn.disabled = !selectedRoom.doorAccess;
+                    btn.disabled = !selectedRoom.doorAccess || document.getElementById('statusText').textContent === 'ESP32 Offline';
                     btnText.textContent = 'OPEN DOOR';
-                }, 3000);
+                }, 1000); 
+                // Delay set to 1s to prevent rapid double-clicks while the server processes the command
             }
         }
 
         async function loadLogs(roomName) {
             try {
-                const response = await fetch(`${API_BASE}/rooms/${roomName}/logs`);
+                // FIX: Updated route to match the one defined in server.js
+                const response = await fetch(`${API_BASE}/logs/${roomName}`); 
                 const data = await response.json();
                 
                 if (data.success) {
                     const logsList = document.getElementById('logsList');
                     
-                    if (data.data.length === 0) {
+                    if (data.logs.length === 0) { // FIX: data.logs is used in server.js
                         logsList.innerHTML = '<div class="empty-state" style="padding: 20px;">No access logs yet</div>';
                         return;
                     }
 
-                    logsList.innerHTML = data.data.slice(-10).reverse().map(log => `
-                        <div class="log-item">
+                    // FIX: data.logs is used in server.js
+                    logsList.innerHTML = data.logs.slice(0, 10).map(log => ` 
+                        <div class="log-item" style="border-left-color: ${log.type === 'success' ? '#28a745' : '#dc3545'};">
                             <div class="log-action">${log.action}</div>
                             <div class="log-time">${new Date(log.timestamp).toLocaleString()}</div>
                         </div>
@@ -631,9 +654,17 @@
             try {
                 const response = await fetch(`${API_BASE}/health`);
                 const data = await response.json();
+                // FIX: Update status based on the health check (this will be overridden by socket.io 'device_update')
                 updateStatus(data.esp32Connected);
+                // Also update the button status based on connectivity
+                if (selectedRoom) {
+                    document.getElementById('openDoorBtn').disabled = !selectedRoom.doorAccess || !data.esp32Connected;
+                }
             } catch (error) {
                 updateStatus(false);
+                if (selectedRoom) {
+                    document.getElementById('openDoorBtn').disabled = true;
+                }
             }
         }
 
@@ -658,13 +689,16 @@
         function hideAddRoomForm() {
             document.getElementById('addRoomForm').style.display = 'none';
             document.getElementById('newRoomName').value = '';
+            document.getElementById('deviceIdInput').value = ''; // Clear device ID input
         }
 
         async function addRoom() {
             const roomName = document.getElementById('newRoomName').value.trim();
+            // CRITICAL FIX: Get Device ID from the new input field
+            const deviceId = document.getElementById('deviceIdInput').value.trim(); 
             
-            if (!roomName) {
-                showNotification('Please enter a room name', 'error');
+            if (!roomName || !deviceId) {
+                showNotification('Please fill in both Room Name and Device ID.', 'error');
                 return;
             }
 
@@ -674,6 +708,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         roomName: roomName,
+                        deviceId: deviceId, // CRITICAL FIX: Include deviceId in the payload
                         doorAccess: true
                     })
                 });
@@ -685,7 +720,8 @@
                     hideAddRoomForm();
                     await loadRooms();
                 } else {
-                    showNotification('Error: ' + data.error, 'error');
+                    // FIX: data.error contains the detailed validation error
+                    showNotification('Error: ' + (data.error || 'Unknown error during room creation.'), 'error');
                 }
             } catch (error) {
                 showNotification('Error adding room: ' + error.message, 'error');
