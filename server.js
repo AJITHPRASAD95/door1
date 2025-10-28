@@ -173,7 +173,14 @@ setInterval(() => {
 // -----------------------------------------------------------------------------
 // API ROUTES
 // -----------------------------------------------------------------------------
-
+// API to get all connected devices
+app.get('/api/devices', (req, res) => {
+    res.status(200).json({ 
+        success: true, 
+        devices: devices,
+        esp32Count: devices.length
+    });
+});
 // API to get all rooms
 app.get('/api/rooms', async (req, res) => {
     try {
