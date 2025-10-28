@@ -198,21 +198,66 @@ app.post('/api/rooms', async (req, res) => {
 });
 
 // API to trigger the door
+// API to trigger the door
 app.post('/api/trigger/:deviceId', async (req, res) => {
     const { deviceId } = req.params;
     const { duration = 3000 } = req.body;
     
-    const targetDevice = devices.find(d => d.deviceId === deviceId);
+    console.log(`🔍 Looking for device: ${deviceId}`);
+    console.log(`📊 Currently connected devices:`, devices.map(d => d.deviceId));
     
-    if (!targetDevice) {
-        await Log.create({ 
-            roomName: deviceId, 
-            action: `TRIGGER_FAILED: Device not connected.`,
-            type: 'failure'
-        });
-        return res.status(404).json({ success: false, error: "ESP32 device not connected or not found." });
+    // Try different device ID formats for flexibility
+    let targetDevice = devices.find(d => d.deviceId === deviceId);
+    
+    // If not found, try without "ESP32_" prefix
+    if (!targetDevice && deviceId.startsWith('ESP32_')) {
+        const shortId = deviceId.replace('ESP32_', '');
+        targetDevice = devices.find(d => d.deviceId === shortId || d.deviceId.endsWith(shortId));
     }
     
+    // If still not found, try with "ESP32_" prefix
+    if (!targetDevice && !deviceId.startsWith('ESP32_')) {
+        const fullId = 'ESP32_' + deviceId;
+        targetDevice = devices.find(d => d.deviceId === fullId);
+    }
+    
+    if (!targetDevice) {
+        console.log(`❌ Device not found: ${deviceId}`);
+        await Log.create({ 
+            roomName: deviceId, 
+            action: `TRIGGER_FAILED: Device ${deviceId} not connected.`,
+            type: 'failure'
+        });
+        return res.status(404).json({ 
+            success: false, 
+            error: `ESP32 device ${deviceId} not connected or not found.`,
+            connectedDevices: devices.map(d => d.deviceId)
+        });
+    }
+    
+    const room = await getRoomByDeviceId(targetDevice.deviceId);
+
+    console.log(`🎯 Sending trigger to device: ${targetDevice.deviceId}, room: ${room ? room.roomName : 'Unassigned'}`);
+    
+    // Send the Socket.IO command to the specific ESP32 client
+    io.to(targetDevice.socketId).emit('door_trigger', {
+        roomName: room ? room.roomName : targetDevice.deviceId,
+        duration: duration
+    });
+    
+    // Log the trigger event
+    await Log.create({ 
+        roomName: room ? room.roomName : targetDevice.deviceId, 
+        action: `DOOR_TRIGGER_SENT`,
+        type: 'success'
+    });
+    
+    res.status(200).json({ 
+        success: true, 
+        message: `Trigger command sent to device: ${targetDevice.deviceId}`,
+        roomName: room ? room.roomName : 'Unassigned'
+    });
+});
     const room = await getRoomByDeviceId(deviceId);
 
     // Send the Socket.IO command to the specific ESP32 client
