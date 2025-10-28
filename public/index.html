@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Door Access Control</title>
+    <title>Door Control System</title>
     <style>
         * {
             margin: 0;
@@ -16,6 +16,7 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
+            color: #333;
         }
 
         .container {
@@ -24,78 +25,104 @@
         }
 
         .header {
-            background: white;
-            padding: 20px 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
             margin-bottom: 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
+            color: white;
         }
 
         .header h1 {
-            color: #333;
-            font-size: 28px;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
-        .status-badge {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
         }
 
-        .status-badge.online {
-            background: #d4edda;
-            color: #155724;
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
         }
 
-        .status-badge.offline {
-            background: #f8d7da;
-            color: #721c24;
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
         }
 
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
         }
 
-        .status-badge.online .status-dot {
-            background: #28a745;
+        .card h2 {
+            color: #4a5568;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
         }
 
-        .status-badge.offline .status-dot {
-            background: #dc3545;
+        .device-card {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        .device-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
 
-        .controls {
-            display: flex;
+        .device-card h3 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 1.3rem;
+        }
+
+        .device-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 10px;
-            flex-wrap: wrap;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        .device-info p {
+            margin: 5px 0;
+        }
+
+        .status-connected {
+            color: #48bb78;
+            font-weight: bold;
+        }
+
+        .status-disconnected {
+            color: #f56565;
+            font-weight: bold;
         }
 
         .btn {
-            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             border: none;
+            padding: 12px 25px;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 1rem;
             font-weight: 600;
-            transition: all 0.3s;
-            display: flex;
+            transition: all 0.3s ease;
+            display: inline-flex;
             align-items: center;
             gap: 8px;
         }
@@ -105,683 +132,400 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
 
-        .btn-primary {
-            background: #007bff;
-            color: white;
+        .btn:active {
+            transform: translateY(0);
         }
 
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-        }
-
-        @media (max-width: 968px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .card {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-
-        .card h2 {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 22px;
-        }
-
-        .room-list {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .room-item {
-            padding: 20px;
-            border: 2px solid #e0e0e0;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s;
-            position: relative;
-        }
-
-        .room-item:hover {
-            border-color: #007bff;
-            transform: translateX(5px);
-        }
-
-        .room-item.selected {
-            border-color: #007bff;
-            background: #e3f2fd;
-        }
-
-        .room-item.disabled {
-            opacity: 0.6;
-            background: #f5f5f5;
-        }
-
-        .room-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .room-name {
-            font-size: 18px;
-            font-weight: 600;
-            color: #333;
-        }
-
-        .room-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-        }
-
-        .status-icon {
-            font-size: 20px;
-        }
-
-        .room-info {
-            font-size: 13px;
-            color: #666;
-            margin-top: 8px;
-        }
-
-        .toggle-switch {
-            position: relative;
-            width: 50px;
-            height: 26px;
-        }
-
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider {
-            background-color: #28a745;
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(24px);
-        }
-
-        .door-control {
-            text-align: center;
-        }
-
-        .selected-room {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-        }
-
-        .selected-room h3 {
-            color: #007bff;
-            font-size: 24px;
-            margin-bottom: 10px;
-        }
-
-        .open-door-btn {
-            width: 100%;
-            padding: 30px;
-            font-size: 24px;
-            font-weight: bold;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 15px;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-        }
-
-        .open-door-btn:hover:not(:disabled) {
-            transform: scale(1.05);
-            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
-        }
-
-        .open-door-btn:disabled {
-            background: #ccc;
+        .btn:disabled {
+            background: #a0aec0;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
-        .open-door-btn .icon {
-            font-size: 36px;
-        }
-
-        .logs {
-            max-height: 300px;
-            overflow-y: auto;
-            margin-top: 20px;
-        }
-
-        .log-item {
-            padding: 12px;
-            background: #f8f9fa;
-            border-left: 3px solid #007bff;
-            margin-bottom: 10px;
-            border-radius: 5px;
-        }
-
-        .log-time {
-            font-size: 12px;
-            color: #666;
-        }
-
-        .log-action {
-            font-weight: 600;
-            color: #333;
-        }
-
-        .empty-state {
+        .status-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
             text-align: center;
-            padding: 40px;
-            color: #999;
+            font-weight: 600;
         }
 
-        .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
+        .status-success {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .status-error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #feb2b2;
+        }
+
+        .status-info {
+            background: #bee3f8;
+            color: #1a365d;
+            border: 1px solid #90cdf4;
         }
 
         .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
+            text-align: center;
+            padding: 20px;
+            color: #4a5568;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            border-radius: 10px;
-            color: white;
-            font-weight: 600;
-            z-index: 1000;
-            animation: slideIn 0.3s;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-        }
-
-        .notification.success {
-            background: #28a745;
-        }
-
-        .notification.error {
-            background: #dc3545;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        .add-room-form {
-            display: flex;
-            gap: 10px;
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
             margin-bottom: 20px;
         }
 
-        .add-room-form input {
-            flex: 1;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
         }
 
-        .add-room-form input:focus {
-            outline: none;
-            border-color: #007bff;
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .refresh-btn {
+            background: #48bb78;
+            margin-bottom: 15px;
+        }
+
+        .no-devices {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+            font-style: italic;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .connection-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .connected {
+            background: #48bb78;
+        }
+
+        .disconnected {
+            background: #f56565;
+        }
+
+        .last-updated {
+            text-align: right;
+            font-size: 0.8rem;
+            color: #718096;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚪 Door Access Control</h1>
-            <div class="controls">
-                <div id="statusBadge" class="status-badge offline">
-                    <span class="status-dot"></span>
-                    <span id="statusText">ESP32 Offline</span>
+            <h1>🚪 Smart Door Control System</h1>
+            <p>Monitor and control your ESP32 door access devices</p>
+        </div>
+
+        <div class="dashboard">
+            <div class="card">
+                <h2>📱 Connected Devices</h2>
+                <div class="connection-status">
+                    <span class="connection-dot" id="connection-dot"></span>
+                    <span id="connection-status">Checking connection...</span>
                 </div>
-                <button class="btn btn-primary" onclick="refreshData()">
-                    <span>🔄</span> Refresh
+                
+                <button class="btn refresh-btn" onclick="loadDevices()">
+                    🔄 Refresh Devices
                 </button>
-                <button class="btn btn-success" onclick="showAddRoomForm()">
-                    <span>➕</span> Add Room
-                </button>
+                
+                <div id="devices-list">
+                    <div class="loading">
+                        <p>Loading devices...</p>
+                    </div>
+                </div>
+                
+                <div class="last-updated" id="last-updated"></div>
+            </div>
+
+            <div class="card">
+                <h2>📊 System Status</h2>
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-number" id="device-count">0</div>
+                        <div class="stat-label">Devices Online</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="room-count">0</div>
+                        <div class="stat-label">Rooms</div>
+                    </div>
+                </div>
+
+                <div id="status-message"></div>
+
+                <h3 style="margin-top: 20px;">🔔 Recent Activity</h3>
+                <div id="recent-logs">
+                    <p style="color: #718096; font-style: italic;">No recent activity</p>
+                </div>
             </div>
         </div>
 
-        <div class="main-content">
-            <div class="card">
-                <h2>📋 Conference Rooms</h2>
-                <div id="addRoomForm" class="add-room-form" style="display: none;">
-                    <input type="text" id="newRoomName" placeholder="Enter room name..." />
-                    <input type="text" id="deviceIdInput" placeholder="Enter ESP32 Device ID..." />
-                    <button class="btn btn-success" onclick="addRoom()">Add</button>
-                    <button class="btn" style="background: #6c757d; color: white;" onclick="hideAddRoomForm()">Cancel</button>
-                </div>
-                <div id="roomList" class="room-list">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">⏳</div>
-                        <div>Loading rooms...</div>
-                    </div>
-                </div>
+        <div class="card">
+            <h2>🔧 Manual Trigger</h2>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="text" id="manual-device-id" placeholder="Enter device ID (e.g., ESP32_5ddaf380)" style="flex: 1; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem;">
+                <button class="btn" onclick="triggerManualDevice()">
+                    🚀 Trigger Door
+                </button>
             </div>
-
-            <div class="card">
-                <h2>🎮 Door Control</h2>
-                <div class="door-control">
-                    <div class="selected-room">
-                        <h3 id="selectedRoomName">No Room Selected</h3>
-                        <p id="selectedRoomStatus" style="color: #666;"></p>
-                    </div>
-                    <button id="openDoorBtn" class="open-door-btn" onclick="triggerDoor()" disabled>
-                        <span class="icon">🚪</span>
-                        <span id="btnText">OPEN DOOR</span>
-                    </button>
-                </div>
-
-                <div class="logs">
-                    <h3 style="margin-top: 30px; margin-bottom: 15px; color: #333;">Recent Access Logs</h3>
-                    <div id="logsList"></div>
-                </div>
-            </div>
+            <p style="margin-top: 10px; font-size: 0.9rem; color: #718096;">
+                Tip: Use device IDs from the connected devices list above
+            </p>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-        const API_BASE = window.location.origin + '/api';
-        let selectedRoom = null;
-        let rooms = [];
-        let socket = io();
+        let socket;
+        let lastUpdateTime = null;
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            loadRooms();
-            checkServerStatus();
-            
-            // Socket.IO connection status
+        // Initialize Socket.IO connection
+        function initSocketIO() {
+            socket = io({
+                transports: ['websocket', 'polling']
+            });
+
             socket.on('connect', () => {
-                console.log('Connected to server');
-                checkServerStatus();
+                updateConnectionStatus(true);
+                console.log('✅ Connected to server');
             });
 
             socket.on('disconnect', () => {
-                console.log('Disconnected from server');
-                updateStatus(false);
+                updateConnectionStatus(false);
+                console.log('❌ Disconnected from server');
             });
 
-            // Listen for device updates from the server
             socket.on('device_update', (data) => {
-                console.log('Device update received:', data);
-                // Check if any registered device is online
-                const esp32IsOnline = data.devices.some(d => d.roomName !== 'Unassigned');
-                updateStatus(esp32IsOnline);
+                console.log('📱 Device update received:', data);
+                updateDeviceList(data.devices);
             });
-        });
 
-        async function loadRooms() {
-            try {
-                const response = await fetch(`${API_BASE}/rooms`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    // FIX: data.rooms is used in server.js, not data.data
-                    rooms = data.rooms; 
-                    renderRooms();
-                    
-                    if (rooms.length > 0 && !selectedRoom) {
-                        selectRoom(rooms[0]);
-                    } else if (rooms.length > 0 && selectedRoom) {
-                        // Re-select the room to update data (e.g., last accessed time)
-                        const currentRoom = rooms.find(r => r.roomName === selectedRoom.roomName);
-                        if (currentRoom) {
-                            selectRoom(currentRoom);
-                        }
-                    }
-                }
-            } catch (error) {
-                showNotification('Error loading rooms: ' + error.message, 'error');
+            socket.on('log_update', (data) => {
+                console.log('📝 Log update received:', data);
+                addRecentLog(data);
+            });
+        }
+
+        // Update connection status UI
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('connection-dot');
+            const status = document.getElementById('connection-status');
+            
+            if (connected) {
+                dot.className = 'connection-dot connected';
+                status.textContent = 'Connected to server';
+                status.style.color = '#48bb78';
+            } else {
+                dot.className = 'connection-dot disconnected';
+                status.textContent = 'Disconnected from server';
+                status.style.color = '#f56565';
             }
         }
 
-        function renderRooms() {
-            const roomList = document.getElementById('roomList');
+        // Load connected devices from API
+        async function loadDevices() {
+            const devicesList = document.getElementById('devices-list');
             
-            if (rooms.length === 0) {
-                roomList.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🏢</div>
-                        <div>No conference rooms found</div>
-                        <div style="margin-top: 10px;">
-                            <button class="btn btn-success" onclick="showAddRoomForm()">Add First Room</button>
-                        </div>
+            try {
+                devicesList.innerHTML = '<div class="loading"><p>Loading devices...</p></div>';
+                
+                const response = await fetch('/api/devices');
+                const result = await response.json();
+                
+                if (result.success) {
+                    updateDeviceList(result.devices);
+                    updateLastUpdated();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Error loading devices:', error);
+                devicesList.innerHTML = `
+                    <div class="status-error status-message">
+                        ❌ Error loading devices: ${error.message}
                     </div>
                 `;
+            }
+        }
+
+        // Update device list in UI
+        function updateDeviceList(devices) {
+            const devicesList = document.getElementById('devices-list');
+            const deviceCount = document.getElementById('device-count');
+            
+            deviceCount.textContent = devices.length;
+            
+            if (devices.length === 0) {
+                devicesList.innerHTML = '<div class="no-devices"><p>No devices connected</p></div>';
                 return;
             }
-
-            roomList.innerHTML = rooms.map(room => `
-                <div class="room-item ${selectedRoom && selectedRoom.roomName === room.roomName ? 'selected' : ''} ${!room.doorAccess ? 'disabled' : ''}" 
-                     onclick="selectRoom(${JSON.stringify(room).replace(/"/g, '&quot;')})">
-                    <div class="room-header">
-                        <div class="room-name">${room.roomName}</div>
-                        <div class="room-status">
-                            <span class="status-icon">${room.doorAccess ? '🔓' : '🔒'}</span>
-                            <label class="toggle-switch" onclick="event.stopPropagation()">
-                                <input type="checkbox" ${room.doorAccess ? 'checked' : ''} 
-                                       onchange="toggleDoorAccess('${room.roomName}', this.checked)">
-                                <span class="slider"></span>
-                            </label>
+            
+            devicesList.innerHTML = devices.map(device => `
+                <div class="device-card">
+                    <h3>${device.roomName}</h3>
+                    <div class="device-info">
+                        <div>
+                            <p><strong>Device ID:</strong> ${device.deviceId}</p>
+                            <p><strong>Chip ID:</strong> ${device.chipId}</p>
+                        </div>
+                        <div>
+                            <p><strong>IP Address:</strong> ${device.ip}</p>
+                            <p><strong>Connected:</strong> ${formatTime(device.connectedAt)}</p>
                         </div>
                     </div>
-                    <div class="room-info">
-                        Device ID: <strong>${room.deviceId}</strong>
-                        <br>
-                        Status: ${room.doorAccess ? 'Access Enabled' : 'Access Disabled'}
-                        ${room.lastAccessed ? `<br>Last accessed: ${new Date(room.lastAccessed).toLocaleString()}` : ''}
-                    </div>
+                    <button class="btn" onclick="triggerDoor('${device.deviceId}')">
+                        🔓 Open Door
+                    </button>
                 </div>
             `).join('');
         }
 
-        function selectRoom(room) {
-            selectedRoom = room;
-            renderRooms();
+        // Trigger door for a specific device
+        async function triggerDoor(deviceId) {
+            const statusMessage = document.getElementById('status-message');
+            statusMessage.innerHTML = `<div class="status-info status-message">Sending trigger command to ${deviceId}...</div>`;
             
-            document.getElementById('selectedRoomName').textContent = room.roomName;
-            document.getElementById('selectedRoomStatus').textContent = 
-                `Device ID: ${room.deviceId} | ${room.doorAccess ? '✅ Access Enabled' : '❌ Access Disabled'}`;
-            
-            // Enable button only if access is enabled and an ESP32 is online (checked by checkServerStatus/device_update)
-            document.getElementById('openDoorBtn').disabled = !room.doorAccess || document.getElementById('statusText').textContent === 'ESP32 Offline';
-            
-            loadLogs(room.roomName);
-        }
-
-        async function toggleDoorAccess(roomName, enabled) {
             try {
-                // NOTE: PATCH endpoint in server.js needs to be implemented for this to work
-                // Assuming the backend has a PUT/PATCH route for room access control
-                const response = await fetch(`${API_BASE}/rooms/${roomName}/access`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ doorAccess: enabled })
-                });
-
-                const data = await response.json();
+                console.log(`🚪 Triggering door for device: ${deviceId}`);
                 
-                if (data.success) {
-                    showNotification(`Access ${enabled ? 'enabled' : 'disabled'} for ${roomName}`, 'success');
-                    await loadRooms();
-                } else {
-                    showNotification('Error: ' + data.error, 'error');
-                }
-            } catch (error) {
-                showNotification('Error updating access: ' + error.message, 'error');
-            }
-        }
-
-        // Function to trigger door
-async function triggerDoor(deviceId) {
-    try {
-        console.log(`🚪 Triggering door for device: ${deviceId}`);
-        
-        const response = await fetch(`/api/trigger/${deviceId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                duration: 3000
-            })
-        });
-
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification(`✅ Door trigger sent to ${result.roomName || deviceId}`, 'success');
-            console.log('✅ Trigger successful:', result.message);
-        } else {
-            showNotification(`❌ Failed: ${result.error}`, 'error');
-            console.error('❌ Trigger failed:', result.error);
-            
-            // Show connected devices for debugging
-            if (result.connectedDevices) {
-                console.log('📱 Connected devices:', result.connectedDevices);
-            }
-        }
-    } catch (error) {
-        console.error('❌ Network error:', error);
-        showNotification('❌ Network error - check console', 'error');
-    }
-}
-
-// Function to load and display connected devices
-async function loadConnectedDevices() {
-    try {
-        const response = await fetch('/api/devices');
-        const result = await response.json();
-        
-        if (result.success) {
-            const devicesList = document.getElementById('devices-list');
-            if (devicesList) {
-                if (result.devices.length === 0) {
-                    devicesList.innerHTML = '<p>No devices connected</p>';
-                } else {
-                    devicesList.innerHTML = result.devices.map(device => `
-                        <div class="device-card">
-                            <h4>${device.roomName}</h4>
-                            <p>Device ID: ${device.deviceId}</p>
-                            <p>IP: ${device.ip}</p>
-                            <p>Connected: ${new Date(device.connectedAt).toLocaleString()}</p>
-                            <button onclick="triggerDoor('${device.deviceId}')">
-                                Open Door
-                            </button>
-                        </div>
-                    `).join('');
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error loading devices:', error);
-    }
-}
-
-// Load devices when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    loadConnectedDevices();
-    // Refresh devices every 10 seconds
-    setInterval(loadConnectedDevices, 10000);
-});
-        async function loadLogs(roomName) {
-            try {
-                // FIX: Updated route to match the one defined in server.js
-                const response = await fetch(`${API_BASE}/logs/${roomName}`); 
-                const data = await response.json();
-                
-                if (data.success) {
-                    const logsList = document.getElementById('logsList');
-                    
-                    if (data.logs.length === 0) { // FIX: data.logs is used in server.js
-                        logsList.innerHTML = '<div class="empty-state" style="padding: 20px;">No access logs yet</div>';
-                        return;
-                    }
-
-                    // FIX: data.logs is used in server.js
-                    logsList.innerHTML = data.logs.slice(0, 10).map(log => ` 
-                        <div class="log-item" style="border-left-color: ${log.type === 'success' ? '#28a745' : '#dc3545'};">
-                            <div class="log-action">${log.action}</div>
-                            <div class="log-time">${new Date(log.timestamp).toLocaleString()}</div>
-                        </div>
-                    `).join('');
-                }
-            } catch (error) {
-                console.error('Error loading logs:', error);
-            }
-        }
-
-        async function checkServerStatus() {
-            try {
-                const response = await fetch(`${API_BASE}/health`);
-                const data = await response.json();
-                // FIX: Update status based on the health check (this will be overridden by socket.io 'device_update')
-                updateStatus(data.esp32Connected);
-                // Also update the button status based on connectivity
-                if (selectedRoom) {
-                    document.getElementById('openDoorBtn').disabled = !selectedRoom.doorAccess || !data.esp32Connected;
-                }
-            } catch (error) {
-                updateStatus(false);
-                if (selectedRoom) {
-                    document.getElementById('openDoorBtn').disabled = true;
-                }
-            }
-        }
-
-        function updateStatus(isConnected) {
-            const badge = document.getElementById('statusBadge');
-            const text = document.getElementById('statusText');
-            
-            if (isConnected) {
-                badge.className = 'status-badge online';
-                text.textContent = 'ESP32 Online';
-            } else {
-                badge.className = 'status-badge offline';
-                text.textContent = 'ESP32 Offline';
-            }
-        }
-
-        function showAddRoomForm() {
-            document.getElementById('addRoomForm').style.display = 'flex';
-            document.getElementById('newRoomName').focus();
-        }
-
-        function hideAddRoomForm() {
-            document.getElementById('addRoomForm').style.display = 'none';
-            document.getElementById('newRoomName').value = '';
-            document.getElementById('deviceIdInput').value = ''; // Clear device ID input
-        }
-
-        async function addRoom() {
-            const roomName = document.getElementById('newRoomName').value.trim();
-            // CRITICAL FIX: Get Device ID from the new input field
-            const deviceId = document.getElementById('deviceIdInput').value.trim(); 
-            
-            if (!roomName || !deviceId) {
-                showNotification('Please fill in both Room Name and Device ID.', 'error');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/rooms`, {
+                const response = await fetch(`/api/trigger/${encodeURIComponent(deviceId)}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        roomName: roomName,
-                        deviceId: deviceId, // CRITICAL FIX: Include deviceId in the payload
-                        doorAccess: true
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        duration: 3000
                     })
                 });
 
-                const data = await response.json();
+                const result = await response.json();
                 
-                if (data.success) {
-                    showNotification('Room added successfully', 'success');
-                    hideAddRoomForm();
-                    await loadRooms();
+                if (result.success) {
+                    statusMessage.innerHTML = `
+                        <div class="status-success status-message">
+                            ✅ Door opened successfully for ${result.roomName || deviceId}
+                        </div>
+                    `;
+                    console.log('✅ Trigger successful:', result);
                 } else {
-                    // FIX: data.error contains the detailed validation error
-                    showNotification('Error: ' + (data.error || 'Unknown error during room creation.'), 'error');
+                    statusMessage.innerHTML = `
+                        <div class="status-error status-message">
+                            ❌ Failed to trigger ${deviceId}: ${result.error}
+                        </div>
+                    `;
+                    console.error('❌ Trigger failed:', result);
                 }
             } catch (error) {
-                showNotification('Error adding room: ' + error.message, 'error');
+                console.error('❌ Network error:', error);
+                statusMessage.innerHTML = `
+                    <div class="status-error status-message">
+                        ❌ Network error: ${error.message}
+                    </div>
+                `;
             }
-        }
-
-        async function refreshData() {
-            await loadRooms();
-            await checkServerStatus();
-            if (selectedRoom) {
-                loadLogs(selectedRoom.roomName);
-            }
-            showNotification('Data refreshed', 'success');
-        }
-
-        function showNotification(message, type = 'success') {
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-
+            
+            // Clear status message after 5 seconds
             setTimeout(() => {
-                notification.remove();
-            }, 3000);
+                statusMessage.innerHTML = '';
+            }, 5000);
         }
 
-        // Refresh status every 10 seconds
-        setInterval(checkServerStatus, 10000);
+        // Trigger door using manual device ID input
+        function triggerManualDevice() {
+            const deviceIdInput = document.getElementById('manual-device-id');
+            const deviceId = deviceIdInput.value.trim();
+            
+            if (!deviceId) {
+                alert('Please enter a device ID');
+                return;
+            }
+            
+            triggerDoor(deviceId);
+            deviceIdInput.value = '';
+        }
+
+        // Add recent log to activity feed
+        function addRecentLog(logData) {
+            const recentLogs = document.getElementById('recent-logs');
+            const logElement = document.createElement('div');
+            logElement.className = 'status-info status-message';
+            logElement.style.marginBottom = '10px';
+            logElement.innerHTML = `
+                <strong>${logData.roomName}</strong>: ${logData.action}
+                <br><small>${formatTime(logData.timestamp)}</small>
+            `;
+            
+            recentLogs.insertBefore(logElement, recentLogs.firstChild);
+            
+            // Keep only last 5 logs
+            if (recentLogs.children.length > 5) {
+                recentLogs.removeChild(recentLogs.lastChild);
+            }
+        }
+
+        // Update last updated time
+        function updateLastUpdated() {
+            lastUpdateTime = new Date();
+            const lastUpdatedElement = document.getElementById('last-updated');
+            lastUpdatedElement.textContent = `Last updated: ${formatTime(lastUpdateTime)}`;
+        }
+
+        // Format time for display
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleTimeString() + ' ' + date.toLocaleDateString();
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            initSocketIO();
+            loadDevices();
+            
+            // Refresh devices every 10 seconds
+            setInterval(loadDevices, 10000);
+            
+            // Load room count
+            fetch('/api/rooms')
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        document.getElementById('room-count').textContent = result.rooms.length;
+                    }
+                })
+                .catch(error => console.error('Error loading rooms:', error));
+        });
     </script>
 </body>
 </html>
