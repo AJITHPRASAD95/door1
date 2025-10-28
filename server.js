@@ -1,14 +1,23 @@
+// --- server.js ---
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
-const { Server } = require('socket.io');
+const dotenv = require('dotenv'); // For environment variables like MONGODB_URI
+
+// FIX: For Socket.IO v2.x, the require returns the constructor function directly.
+const SocketIOServer = require('socket.io'); 
+
+// Load environment variables from .env file (if running locally)
+dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 
 // Enhanced Socket.IO configuration for ESP32 compatibility
-const io = new Server(server, {
+// FIX: Call the constructor function directly
+const io = SocketIOServer(server, { 
   cors: {
     origin: "*",
     methods: ["GET", "POST", "OPTIONS"],
@@ -16,7 +25,7 @@ const io = new Server(server, {
     allowedHeaders: ["Content-Type"]
   },
   transports: ['websocket', 'polling'],
-  allowEIO3: true,
+  allowEIO3: true, // CRITICAL: Allows older Engine.IO v3 clients (like ESP32) to connect
   pingTimeout: 60000,
   pingInterval: 25000,
   upgradeTimeout: 30000,
@@ -36,299 +45,207 @@ app.use(express.json());
 // Serve static files from 'public' directory
 app.use(express.static('public'));
 
+// -----------------------------------------------------------------------------
+// MONGODB SCHEMA AND CONNECTION
+// -----------------------------------------------------------------------------
+
+// Define a simple schema for Rooms
+const RoomSchema = new mongoose.Schema({
+  roomName: { type: String, required: true, unique: true },
+  deviceId: { type: String, required: true, unique: true },
+  doorAccess: { type: Boolean, default: false }
+});
+const Room = mongoose.model('Room', RoomSchema);
+
+// Define a simple schema for Logs
+const LogSchema = new mongoose.Schema({
+  roomName: { type: String, required: true },
+  timestamp: { type: Date, default: Date.now },
+  action: { type: String, required: true }, // e.g., "DOOR_OPENED", "ACCESS_DENIED"
+  type: { type: String, enum: ['success', 'failure'], required: true }
+});
+const Log = mongoose.model('Log', LogSchema);
+
+
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ajithtest95:ajith%40123@cluster0.n3qvh.mongodb.net/door';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
-})
-.then(() => console.log('✅ Connected to MongoDB'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
-
-// Conference Room Schema
-const conferenceRoomSchema = new mongoose.Schema({
-  roomName: {
-    type: String,
-    required: true,
-    unique: true
-  },
-  doorAccess: {
-    type: Boolean,
-    default: false
-  },
-  lastAccessed: {
-    type: Date,
-    default: null
-  },
-  accessLog: [{
-    timestamp: Date,
-    action: String
-  }]
-}, {
-  timestamps: true
+}).then(() => {
+  console.log('✅ MongoDB connected successfully');
+}).catch(err => {
+  console.error('❌ MongoDB connection error:', err);
 });
 
-const ConferenceRoom = mongoose.model('ConferenceRoom', conferenceRoomSchema);
+// -----------------------------------------------------------------------------
+// SOCKET.IO LOGIC & DEVICE TRACKING
+// -----------------------------------------------------------------------------
 
-// Store ESP32 socket connections with metadata
-const esp32Devices = new Map();
+// Simple in-memory device tracking
+let devices = [];
+let esp32Connected = false;
 
-// Socket.IO Connection Handling
+// Function to find the room associated with a connected ESP32
+const getRoomByDeviceId = (deviceId) => {
+    return Room.findOne({ deviceId });
+};
+
 io.on('connection', (socket) => {
-  console.log('📱 Client connected:', socket.id, 'Transport:', socket.conn.transport.name);
+  console.log(`📱 Client connected: ${socket.id}. Transport: ${socket.conn.transport.name}`);
+  
+  socket.on('esp32_register', async (data) => {
+    const { deviceId, chipId, ip } = data;
+    
+    // Check if device is already registered
+    let existingDevice = devices.find(d => d.deviceId === deviceId);
 
-  // Log transport upgrade
-  socket.conn.on('upgrade', (transport) => {
-    console.log('🔄 Transport upgraded to:', transport.name);
-  });
-
-  // ESP32 Registration
-  socket.on('esp32_register', (data) => {
-    console.log('🔌 ESP32 registration attempt:', data);
-    
-    const deviceInfo = {
-      socket: socket,
-      deviceId: data.deviceId || 'UNKNOWN',
-      chipId: data.chipId || 'UNKNOWN',
-      ip: data.ip || socket.handshake.address,
-      registeredAt: new Date(),
-      lastSeen: new Date()
-    };
-    
-    esp32Devices.set(socket.id, deviceInfo);
-    
-    console.log('✅ ESP32 registered successfully:', {
-      socketId: socket.id,
-      deviceId: deviceInfo.deviceId,
-      ip: deviceInfo.ip,
-      totalDevices: esp32Devices.size
-    });
-    
-    socket.emit('registered', { 
-      status: 'success', 
-      message: 'ESP32 registered successfully',
-      socketId: socket.id
-    });
-  });
-
-  // Handle ping/pong for connection health
-  socket.on('ping', () => {
-    socket.emit('pong');
-    if (esp32Devices.has(socket.id)) {
-      const device = esp32Devices.get(socket.id);
-      device.lastSeen = new Date();
-    }
-  });
-
-  // Handle disconnection
-  socket.on('disconnect', (reason) => {
-    console.log('📴 Client disconnected:', socket.id, 'Reason:', reason);
-    
-    if (esp32Devices.has(socket.id)) {
-      const device = esp32Devices.get(socket.id);
-      console.log('🔌 ESP32 disconnected:', device.deviceId);
-      esp32Devices.delete(socket.id);
-      console.log('📊 Remaining ESP32 devices:', esp32Devices.size);
-    }
-  });
-
-  // Handle connection errors
-  socket.on('error', (error) => {
-    console.error('❌ Socket error:', error);
-  });
-
-  // Handle reconnection
-  socket.on('reconnect', (attemptNumber) => {
-    console.log('🔄 Client reconnected after', attemptNumber, 'attempts');
-  });
-});
-
-// REST API Routes
-
-// Get all conference rooms
-app.get('/api/rooms', async (req, res) => {
-  try {
-    const rooms = await ConferenceRoom.find();
-    res.json({ success: true, data: rooms });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Get specific room
-app.get('/api/rooms/:roomName', async (req, res) => {
-  try {
-    const room = await ConferenceRoom.findOne({ roomName: req.params.roomName });
-    if (!room) {
-      return res.status(404).json({ success: false, error: 'Room not found' });
-    }
-    res.json({ success: true, data: room });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Create or update room
-app.post('/api/rooms', async (req, res) => {
-  try {
-    const { roomName, doorAccess } = req.body;
-    
-    let room = await ConferenceRoom.findOne({ roomName });
-    
-    if (room) {
-      room.doorAccess = doorAccess !== undefined ? doorAccess : room.doorAccess;
-      await room.save();
-    } else {
-      room = await ConferenceRoom.create({ roomName, doorAccess });
-    }
-    
-    res.json({ success: true, data: room });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Update door access setting
-app.patch('/api/rooms/:roomName/access', async (req, res) => {
-  try {
-    const { doorAccess } = req.body;
-    const room = await ConferenceRoom.findOneAndUpdate(
-      { roomName: req.params.roomName },
-      { doorAccess },
-      { new: true }
-    );
-    
-    if (!room) {
-      return res.status(404).json({ success: false, error: 'Room not found' });
-    }
-    
-    res.json({ success: true, data: room });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Trigger door open (Main endpoint for Flutter app and Web interface)
-app.post('/api/rooms/:roomName/trigger', async (req, res) => {
-  try {
-    const room = await ConferenceRoom.findOne({ roomName: req.params.roomName });
-    
-    if (!room) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Room not found' 
-      });
-    }
-    
-    // Check if door access is enabled
-    if (!room.doorAccess) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Door access is disabled for this room' 
-      });
-    }
-    
-    // Check if any ESP32 is connected
-    if (esp32Devices.size === 0) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'No ESP32 devices connected' 
-      });
-    }
-    
-    // Send trigger command to all connected ESP32 devices
-    let sentCount = 0;
-    esp32Devices.forEach((device, socketId) => {
-      try {
-        device.socket.emit('door_trigger', { 
-          roomName: req.params.roomName,
-          duration: 3000, // 3 seconds
-          timestamp: new Date().toISOString()
+    if (!existingDevice) {
+        // Register new device
+        const room = await getRoomByDeviceId(deviceId);
+        
+        devices.push({
+            socketId: socket.id,
+            deviceId: deviceId,
+            chipId: chipId,
+            roomName: room ? room.roomName : 'Unassigned',
+            ip: ip,
+            connectedAt: new Date(),
         });
-        sentCount++;
-        console.log('🚪 Door trigger sent to ESP32:', device.deviceId);
-      } catch (error) {
-        console.error('❌ Error sending to ESP32:', device.deviceId, error);
-      }
-    });
+        
+        esp32Connected = true;
+        
+        console.log(`📡 ESP32 Registered: ${deviceId} (${room ? room.roomName : 'Unassigned'})`);
+        socket.emit('registered', { success: true });
+        
+        // Notify web clients
+        io.emit('device_update', { devices: devices, esp32Count: devices.length });
+
+    } else {
+        // Update existing device's socketId
+        existingDevice.socketId = socket.id;
+        existingDevice.ip = ip;
+        esp32Connected = true;
+    }
+  });
+
+  socket.on('door_opened_feedback', async (data) => {
+    const { deviceId, roomName } = data;
     
-    if (sentCount === 0) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'Failed to send trigger to ESP32 devices' 
-      });
+    console.log(`🚪 Door opened feedback received for ${roomName}`);
+    
+    // Log the event
+    await Log.create({ 
+        roomName: roomName, 
+        action: 'DOOR_OPENED',
+        type: 'success'
+    });
+
+    // Notify web clients
+    io.emit('log_update', { roomName: roomName, action: 'DOOR_OPENED', timestamp: new Date() });
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`❌ Client disconnected: ${socket.id}`);
+    
+    // Remove device from tracking
+    const index = devices.findIndex(d => d.socketId === socket.id);
+    if (index !== -1) {
+        devices.splice(index, 1);
     }
     
-    // Update last accessed time and log
-    room.lastAccessed = new Date();
-    room.accessLog.push({
-      timestamp: new Date(),
-      action: 'Door opened'
-    });
-    await room.save();
+    // Update global status
+    esp32Connected = devices.some(d => d.roomName !== 'Unassigned');
     
-    res.json({ 
-      success: true, 
-      message: `Door trigger sent successfully to ${sentCount} device(s)`,
-      data: room
-    });
-    
-  } catch (error) {
-    console.error('❌ Error in door trigger:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+    // Notify web clients
+    io.emit('device_update', { devices: devices, esp32Count: devices.length });
+  });
 });
 
-// Get access logs
-app.get('/api/rooms/:roomName/logs', async (req, res) => {
-  try {
-    const room = await ConferenceRoom.findOne({ roomName: req.params.roomName });
-    if (!room) {
-      return res.status(404).json({ success: false, error: 'Room not found' });
+// Cleanup disconnected devices periodically
+setInterval(() => {
+    devices = devices.filter(d => io.sockets.connected[d.socketId]);
+    esp32Connected = devices.some(d => d.roomName !== 'Unassigned');
+    io.emit('device_update', { devices: devices, esp32Count: devices.length });
+}, 60000); // Check every 60 seconds
+
+// -----------------------------------------------------------------------------
+// API ROUTES
+// -----------------------------------------------------------------------------
+
+// API to get all rooms
+app.get('/api/rooms', async (req, res) => {
+    try {
+        const rooms = await Room.find({});
+        res.status(200).json({ success: true, rooms });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
-    res.json({ success: true, data: room.accessLog });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
 });
 
-// Health check
+// API to add a new room
+app.post('/api/rooms', async (req, res) => {
+    try {
+        const { roomName, deviceId, doorAccess } = req.body;
+        const newRoom = new Room({ roomName, deviceId, doorAccess });
+        await newRoom.save();
+        io.emit('room_update'); // Notify all clients
+        res.status(201).json({ success: true, room: newRoom });
+    } catch (error) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
+// API to trigger the door
+app.post('/api/trigger/:deviceId', async (req, res) => {
+    const { deviceId } = req.params;
+    const { duration = 3000 } = req.body;
+    
+    const targetDevice = devices.find(d => d.deviceId === deviceId);
+    
+    if (!targetDevice) {
+        await Log.create({ 
+            roomName: deviceId, 
+            action: `TRIGGER_FAILED: Device not connected.`,
+            type: 'failure'
+        });
+        return res.status(404).json({ success: false, error: "ESP32 device not connected or not found." });
+    }
+    
+    const room = await getRoomByDeviceId(deviceId);
+
+    // Send the Socket.IO command to the specific ESP32 client
+    io.to(targetDevice.socketId).emit('door_trigger', {
+        roomName: room ? room.roomName : deviceId,
+        duration: duration
+    });
+    
+    res.status(200).json({ success: true, message: `Trigger command sent to device: ${deviceId}` });
+});
+
+// API to get logs for a room
+app.get('/api/logs/:roomName', async (req, res) => {
+    const { roomName } = req.params;
+    try {
+        const logs = await Log.find({ roomName }).sort({ timestamp: -1 }).limit(50);
+        res.status(200).json({ success: true, logs });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+// Health check route
 app.get('/api/health', (req, res) => {
-  const connectedDevices = Array.from(esp32Devices.values()).map(device => ({
-    deviceId: device.deviceId,
-    ip: device.ip,
-    registeredAt: device.registeredAt,
-    lastSeen: device.lastSeen
-  }));
-
-  res.json({ 
-    success: true, 
+  res.status(200).json({
+    success: true,
     status: 'Server is running',
-    esp32Connected: esp32Devices.size > 0,
-    esp32Count: esp32Devices.size,
-    connectedDevices: connectedDevices,
+    esp32Connected: esp32Connected,
+    esp32Count: devices.length,
+    connectedDevices: devices.map(d => ({ deviceId: d.deviceId, roomName: d.roomName, ip: d.ip })),
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
-  });
-});
-
-// Get ESP32 devices status
-app.get('/api/devices', (req, res) => {
-  const devices = Array.from(esp32Devices.values()).map(device => ({
-    socketId: device.socket.id,
-    deviceId: device.deviceId,
-    chipId: device.chipId,
-    ip: device.ip,
-    registeredAt: device.registeredAt,
-    lastSeen: device.lastSeen,
-    transport: device.socket.conn.transport.name
-  }));
-
-  res.json({
-    success: true,
-    count: devices.length,
-    devices: devices
   });
 });
 
@@ -353,7 +270,6 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`📡 WebSocket server ready`);
   console.log(`🌐 Web interface: http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔌 ESP32 devices: http://localhost:${PORT}/api/devices`);
 });
 
 // Graceful shutdown
@@ -367,16 +283,3 @@ process.on('SIGTERM', () => {
     });
   });
 });
-
-// Cleanup disconnected devices periodically
-setInterval(() => {
-  const now = new Date();
-  esp32Devices.forEach((device, socketId) => {
-    const timeSinceLastSeen = now - device.lastSeen;
-    // Remove devices that haven't been seen in 5 minutes
-    if (timeSinceLastSeen > 300000) {
-      console.log('🧹 Removing stale ESP32 device:', device.deviceId);
-      esp32Devices.delete(socketId);
-    }
-  });
-}, 60000); // Check every minute
